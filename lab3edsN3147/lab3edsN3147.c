@@ -30,6 +30,8 @@ FILE *fr, *fw; //файлы ввода/вывода
 
 char str[MAX_STRING]; //строки для ввода и обработки данных
 char *concatenated_string = NULL;
+char *concatenated_string_s = NULL;
+char *concatenated_string_e = NULL;
 
 //функция - алгоритм Луна для проверки контрольной суммы найденной строки
 int luhn(char *card) {
@@ -69,9 +71,10 @@ int check_file (char *str, char *mode) {
 	if (!strcmp(mode, "r")) {
 		if ((fr = fopen(str, "r")) == NULL) {
 			fprintf(stderr, "Ошибка: не удалось открыть файл %s для чтения.\n", str);
-			return EXIT_FAILURE;
+			exit(EXIT_FAILURE);
 		}
 	} else fw = fopen(str, "w");
+	return 0;
 }
 
 //функция для проверки, нужно ли устанавливать разрыв
@@ -175,7 +178,7 @@ void analyze_string(char* str, int* ind_gap, int gaps, int lcnt) {
         int shift = 0;
         int ind[MAX_ARRAY_LENGTH];
         int cur_ind = 0;			
-        // поиск вхождений подстроки
+        //поиск вхождений подстроки
     	while (regexec(&regex_pattern, str + shift, 1, &match, REG_NOTBOL) == 0) {
         	if (match.rm_so == -1) {
 				break;
@@ -184,14 +187,22 @@ void analyze_string(char* str, int* ind_gap, int gaps, int lcnt) {
         	for (int i = shift + match.rm_so; i < (int) (shift + match.rm_so + 19); i++) {
         		card[i - shift - match.rm_so] = (char)(str[i]);
         	}
-        	// если найденная подстрока удовлетворяет алгоритму Луна, необходимо запомнить индекс начала такой подстроки
+        	//найденная подстрока удовлетворяет алгоритму Луна - необходимо запомнить индекс начала такой подстроки
         	if (luhn(card)) {
-        		if (((lcnt >= sline) || (sline == 1)) && ((lcnt <= eline) || (eline == -1))) {
-        			ind[cur_ind] = shift + match.rm_so;
-        			cur_ind++;
-        		}
+				if (gaps) {
+					if ((((shift + match.rm_so) >= ind_gap[sline - 2]) || (sline == 1)) && (((shift + match.rm_so) <= ind_gap[eline - 1]) || (eline == -1))) {
+						ind[cur_ind] = shift + match.rm_so;
+						cur_ind++;
+					}
+				}
+				else {
+					if (((lcnt >= sline) || sline == 1) && ((lcnt <= eline) || eline == -1)) {
+						ind[cur_ind] = shift + match.rm_so;
+						cur_ind++;
+					}
+				}
         	}
-        	// обновление смещения для продолжения поиска
+        	//обновление смещения для продолжения поиска
         	shift += match.rm_eo;
     	}
     	print_modifyed_string(ind, str, cur_ind, ind_gap, gaps);
@@ -203,16 +214,16 @@ void analyze_string(char* str, int* ind_gap, int gaps, int lcnt) {
 
 int solve() {
 	int lcnt = 0;
-	// компиляция регулярного выражения
+	//компиляция регулярного выражения
     value = regcomp(&regex_pattern, pattern, 0);
 	if (line) {
     	if (!console_input) {
     		while (fgets(str, sizeof(str), fr) != NULL) {
 				lcnt++;
     			int length = strlen(str);
-    			if (str[length - 1] == '\n') {
-            			str[length - 1] = '\0';
-            			length--;
+    			if (str[length - 1] == '\n' || str[length - 1] == '\r') {
+            		str[length - 1] = '\0';
+            		length--;
         		}
         		analyze_string(str, NULL, 0, lcnt);
     		}
@@ -221,7 +232,7 @@ int solve() {
     		while (fgets(str, sizeof(str), stdin) != NULL) {
 				lcnt++;
     			int length = strlen(str);
-    			if (str[length - 1] == '\n') {
+    			if (str[length - 1] == '\n' || str[length - 1] == '\r') {
             		str[length - 1] = '\0';
             		length--;
         		}
@@ -236,36 +247,33 @@ int solve() {
     	int gaps = 0;
     	if (!console_input) {
     		while (fgets(str, sizeof(str), fr) != NULL) {
-				lcnt++;
     			int length = strlen(str);
-    			// удаление символа переноса строки
-    			if (str[length - 1] == '\n') {
+    			//удаление символа переноса строки
+    			if (str[length - 1] == '\n' || str[length - 1] == '\r') {
             		str[length - 1] = '\0';
             		length--;
         		}
-        		// динамическое выделение памяти для дополненной строки
+        		//динамическое выделение памяти для дополненной строки
     			char *temp = realloc(concatenated_string, total_length + length);	
-    			// обработка ошибки выделения памяти
         		if (temp == NULL) {
             		fprintf(stderr, "Ошибка при выделении памяти\n");
             		free(concatenated_string);
             		return EXIT_FAILURE;
             	}
-            	// дополнение общей строки
+            	//дополнение общей строки
             	concatenated_string = temp;
         		strcpy(concatenated_string + total_length, str);
 				total_length += length;
-				// установка "разрыва" строки
+				//установка "разрыва" строки
         		ind_gap[gaps] = ((int)total_length);
         		gaps++;
             }
         }
 		else {
         	while (fgets(str, sizeof(str), stdin) != NULL) {
-				lcnt++;
     			int length = strlen(str);
-    			// удаление символа переноса строки
-    			if (str[length - 1] == '\n') {
+    			//удаление символа переноса строки
+    			if (str[length - 1] == '\n' || str[length - 1] == '\r') {
             		str[length - 1] = '\0';
             		length--;
         		}
@@ -288,9 +296,10 @@ int solve() {
         }
 		analyze_string(concatenated_string, ind_gap, gaps, lcnt);
     }
+	return 0;
 }
 
-int check_opt(char *str) {
+void check_opt(char *str) {
 	int lenght_str = strlen(str);
 	if (str[0] == '-') {
 		switch (lenght_str) {
@@ -330,7 +339,7 @@ int check_opt(char *str) {
 				if (str[1] == 'b' || str[1] == 'e') {
 					if (str[2] == '=') {
 						char val[strlen(str) - 2];
-						for (int i = 3; i < strlen(str); i++) {
+						for (unsigned int i = 3; i < strlen(str); i++) {
 							val[i - 3] = str[i];
 						}
 						val[strlen(str) - 3] = '\0';
